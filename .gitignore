@@ -1,0 +1,23 @@
+node_modules/
+dist/
+*.log
+report.json
+report.md
+report-live-checks.json
+report-live-checks.md
+provider-check.md
+.DS_Store
+.env
+
+# Your live config carries your own key env var and identifying headers. Copy
+# providers.example.json instead; it has no keys and no personal references.
+providers.live.json
+
+# Generated run artifacts. Regenerate with the commands in README.md; the JSON
+# in particular can be large and is not worth versioning.
+reports/
+
+# Session notes, not project docs. They are full of absolute paths and describe
+# one person's quota and schedule. FINDINGS.md is the part worth keeping.
+HANDOFF.md
+SCHEDULE.md

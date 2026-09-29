@@ -1,0 +1,46 @@
+{
+  "defaults": {
+    "timeoutMs": 60000,
+    "runs": 20,
+    "latencyConcurrency": 1
+  },
+  "providers": [
+    {
+      "id": "acme-gateway",
+      "name": "Acme LLM Gateway",
+      "baseUrl": "https://api.acme.example/v1",
+      "model": "acme-large-70b",
+      "keyEnv": "ACME_API_KEY",
+      "apiKeyHeader": "Authorization",
+      "apiKeyPrefix": "Bearer ",
+      "extraBody": {
+        "user": "provider-check/0.1"
+      },
+      "timeouts": {
+        "latency": 180000
+      },
+      "notes": "Rate limited to 60 rpm; latency runs are sequential for this reason."
+    },
+    {
+      "id": "selfhosted-vllm",
+      "name": "Self-hosted vLLM",
+      "baseUrl": "http://10.0.3.17:8000/v1",
+      "model": "Qwen2.5-72B-Instruct",
+      "keyEnv": "VLLM_API_KEY",
+      "apiKeyPrefix": "Bearer ",
+      "notes": "Single-model server, so it ignores the model field. key may be dummy."
+    },
+    {
+      "id": "openrouter",
+      "name": "OpenRouter",
+      "baseUrl": "https://openrouter.ai/api/v1",
+      "model": "openai/gpt-4o-mini",
+      "keyEnv": "OPENROUTER_API_KEY",
+      "extraBody": {
+        "provider": {
+          "sort": "latency"
+        }
+      }
+    }
+  ]
+}
