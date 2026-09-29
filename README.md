@@ -10,6 +10,16 @@ Launch-QA readiness checks for OpenAI-compatible LLM endpoints.
 > [`FINDINGS.md`](FINDINGS.md), along with sixteen bugs the tool found in itself
 > while making them.
 
+**If you read one thing, read [`FINDINGS.md`](FINDINGS.md).** It is the part
+that is not boilerplate: sixteen bugs this tool found in *itself* while being
+run against real endpoints, three of which produced a confident wrong answer
+rather than an error. Bug #14 is the one worth your time — the context probe
+reported "1,000,000 tokens confirmed" for a request the provider had just
+rejected with HTTP 400, because the verdict compared with `<` where it needed
+`<=`. A tool that reports success for the failure it exists to catch is worse
+than no tool, because it gets trusted. The rest of this README is
+documentation; that file is the argument.
+
 This is the tool you run **before** onboarding a new provider into a router. It
 answers a narrow question: if I send production traffic to this endpoint
 tomorrow, what will break? Every check returns `pass` / `warn` / `fail` with
