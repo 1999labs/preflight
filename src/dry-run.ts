@@ -237,7 +237,7 @@ function worstCaseNote(def: CheckDef, n: number, worst: number): string {
 
 export function renderDryRun(report: DryRunReport): string {
   const out: string[] = [];
-  out.push('provider-check — DRY RUN (no network calls made)');
+  out.push('preflight — DRY RUN (no network calls made)');
   out.push('');
 
   for (const t of report.targets) {

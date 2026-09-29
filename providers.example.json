@@ -14,7 +14,7 @@
       "apiKeyHeader": "Authorization",
       "apiKeyPrefix": "Bearer ",
       "extraBody": {
-        "user": "provider-check/0.1"
+        "user": "preflight/0.1"
       },
       "timeouts": {
         "latency": 180000

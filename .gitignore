@@ -5,7 +5,7 @@ report.json
 report.md
 report-live-checks.json
 report-live-checks.md
-provider-check.md
+preflight.md
 .DS_Store
 .env
 

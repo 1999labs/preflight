@@ -111,7 +111,7 @@ function makeContext(
 }
 
 async function main(): Promise<void> {
-  process.stdout.write('\nprovider-check tests\n\n');
+  process.stdout.write('\npreflight tests\n\n');
 
   process.stdout.write('\ncontext_probe\n');
   await test('the ladder is sized to reach the claimed window', async () => {

@@ -26,7 +26,7 @@ const STATUS_LABEL: Record<Status, string> = {
 
 export function renderMarkdown(report: Report): string {
   const out: string[] = [];
-  out.push(`# provider-check report`);
+  out.push(`# preflight report`);
   out.push('');
   out.push(
     `**${report.summary.status.toUpperCase()}** — ${report.summary.providers} provider(s), ` +

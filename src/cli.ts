@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * provider-check CLI.
+ * preflight CLI.
  *
  * Exit codes:
  *   0  every check passed (warn is not a failure)
@@ -58,7 +58,7 @@ interface CliOptions {
 const program = new Command();
 
 program
-  .name('provider-check')
+  .name('preflight')
   .description(
     'Launch-QA readiness check for OpenAI-compatible LLM endpoints. Produces a per-check ' +
       'report and a non-zero exit code when something would break in production.',
@@ -235,7 +235,7 @@ try {
     throw new ConfigError('nothing to check: pass --base-url and --model, or --config providers.json');
   }
 } catch (err) {
-  process.stderr.write(`provider-check: ${err instanceof Error ? err.message : String(err)}\n`);
+  process.stderr.write(`preflight: ${err instanceof Error ? err.message : String(err)}\n`);
   program.outputHelp();
   process.exit(2);
 }
@@ -340,7 +340,7 @@ if (opts.out) {
   written.push(writeReport(opts.out, report, globalRedactor));
 }
 if (opts.md) {
-  const mdPath = opts.out ? replaceExtension(opts.out, '.md') : 'provider-check.md';
+  const mdPath = opts.out ? replaceExtension(opts.out, '.md') : 'preflight.md';
   const abs = resolve(mdPath);
   mkdirSync(dirname(abs), { recursive: true });
   writeFileSync(abs, renderMarkdown(globalRedactor.redactUnknown(report) as typeof report), 'utf8');

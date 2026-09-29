@@ -283,7 +283,7 @@ function runCodeTest(code: string, test: string): { ok: boolean; error?: string 
   let dir: string;
   let file: string;
   try {
-    dir = mkdtempSync(join(tmpdir(), 'provider-check-code-'));
+    dir = mkdtempSync(join(tmpdir(), 'preflight-code-'));
     file = join(dir, 'candidate.js');
     writeFileSync(
       file,

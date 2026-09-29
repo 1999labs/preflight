@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # Every check is exercised against a local mock server on loopback.
+      # Nothing here reaches a real provider, and no API key is required or
+      # read: a suite that needed a live key to pass would not be a gate.
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build

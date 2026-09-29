@@ -1,5 +1,5 @@
 /**
- * Shared types for provider-check.
+ * Shared types for preflight.
  *
  * A check NEVER throws. Every outcome - including timeouts, DNS failures and
  * malformed responses - is a CheckResult with a status. That is the whole

@@ -69,7 +69,7 @@ export default defineCheck({
       method: 'POST',
       path: '/chat/completions',
       body: ctx.body({
-        model: 'provider-check/definitely-not-a-real-model-9f3a2c',
+        model: 'preflight/definitely-not-a-real-model-9f3a2c',
         messages: [{ role: 'user', content: 'ping' }],
         max_tokens: 16,
       }),

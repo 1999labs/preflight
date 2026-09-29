@@ -20,7 +20,7 @@ import type {
   Status,
 } from './types.js';
 
-export const TOOL_NAME = 'provider-check';
+export const TOOL_NAME = 'preflight';
 export const TOOL_VERSION = '0.1.0';
 
 export function summarize(results: CheckResult[], durationMs: number): RunSummary {

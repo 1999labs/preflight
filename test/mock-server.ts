@@ -2,7 +2,7 @@
  * A deliberately small OpenAI-compatible server used by `npm test`.
  *
  * It exists so the checks can be verified - including their failure paths -
- * without pointing provider-check at anyone's production endpoint. Each defect
+ * without pointing preflight at anyone's production endpoint. Each defect
  * flag reproduces a real bug we have seen gateways ship.
  */
 

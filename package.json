@@ -1,5 +1,5 @@
 {
-  "name": "provider-check",
+  "name": "preflight",
   "version": "0.1.0",
   "private": true,
   "description": "Launch-QA readiness checks for OpenAI-compatible LLM endpoints",
@@ -8,7 +8,7 @@
     "node": ">=20"
   },
   "bin": {
-    "provider-check": "./dist/cli.js"
+    "preflight": "./dist/cli.js"
   },
   "files": [
     "dist",
@@ -18,7 +18,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx src/cli.ts",
-    "provider-check": "tsx src/cli.ts",
+    "preflight": "tsx src/cli.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "tsx test/run.ts"
   },
