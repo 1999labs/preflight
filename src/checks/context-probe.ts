@@ -206,10 +206,65 @@ export default defineCheck({
       );
     }
 
-    // The claim is contradicted when a rung at or below the claimed window
-    // failed. `<=`, not `<`: a failure exactly AT the claim is the claim being
-    // wrong, and treating it as a pass is the one error this check must not make.
+    // A rejection at or below the claimed window does NOT automatically mean the
+    // claim is false. If the endpoint tells us how many tokens it counted, and
+    // that count differs materially from ours, then the likely story is that our
+    // filler inflates under the provider's tokenizer — an inability to verify,
+    // not a defect to report. Those are opposite conclusions and conflating them
+    // turns a measurement tool into an accusation engine.
+    const counts = stopped ? parseTokenCounts(stopped.error ?? '') : null;
+    const estimatorGap = counts?.requested !== undefined && stopped!.estimated > 0
+      ? counts.requested / stopped!.estimated
+      : undefined;
+
     if (stopped && stopped.target <= (claimed ?? effectiveCeiling)) {
+      // We estimated within the claim, the provider counted above it, and the
+      // provider's own stated ceiling agrees with the catalog. The claim is not
+      // contradicted; our filler is simply not the right shape to prove it.
+      if (
+        estimatorGap !== undefined &&
+        estimatorGap > 1.05 &&
+        stopped.estimated <= (claimed ?? Infinity) &&
+        counts?.max !== undefined &&
+        counts.max >= claimed!
+      ) {
+        metrics['tokenizer_ratio'] = Number(estimatorGap.toFixed(3));
+        metrics['provider_counted_tokens'] = counts.requested!;
+        metrics['our_estimate_tokens'] = stopped.estimated;
+        init.findings = [
+          ...(init.findings ?? []),
+          {
+            id: 'context_probe_tokenizer_disagreement',
+            label: 'The probe could not fill the claimed window',
+            observed:
+              `we estimated ${stopped.estimated.toLocaleString('en-US')} tokens, below the ` +
+              `${(claimed ?? 0).toLocaleString('en-US')} claim, but the endpoint counted the same request as ` +
+              `${counts.requested!.toLocaleString('en-US')} and rejected it. The endpoint states its own ceiling as ` +
+              `${counts.max!.toLocaleString('en-US')} tokens, which agrees with the catalog.`,
+            inference:
+              `the provider's tokenizer counts our filler about ${Math.round((estimatorGap - 1) * 100)}% larger than ` +
+              'our estimate does, so the prompt crossed the ceiling in transit rather than the model falling short. ' +
+              'The catalog claim is not contradicted by this run, but neither can it be confirmed with an estimate-based ' +
+              'probe, and the gap is provider-specific rather than a constant.',
+            check: name,
+            evidence: {
+              tokenizer_ratio: Number(estimatorGap.toFixed(3)),
+              our_estimate: stopped.estimated,
+              provider_counted: counts.requested!,
+              provider_stated_max: counts.max!,
+            },
+          },
+        ];
+        return warn(
+          name,
+          title,
+          `verified to ${maxOk.toLocaleString('en-US')} tokens; the ${(claimed ?? 0).toLocaleString('en-US')}-token claim ` +
+            `could not be confirmed because the endpoint counts our filler about ${Math.round((estimatorGap - 1) * 100)}% ` +
+            'larger than we do. Treat the claim as unverified, not as refuted.',
+          init,
+        );
+      }
+
       const atClaim = stopped.target === claimed;
       return fail(
         name,
@@ -268,6 +323,30 @@ function rungTimeout(target: number, budget: number): number {
   return Math.max(60_000, Math.round(budget * Math.max(0.5, share)));
 }
 
+/**
+ * Pull the endpoint's own token counts out of a context-length rejection.
+ *
+ * Many providers are helpful enough to say both what they counted and what their
+ * ceiling is, which is the only way to tell "the model's window is smaller than
+ * advertised" from "our estimate of the prompt was too low". Without both numbers
+ * the two are indistinguishable and the check has to guess.
+ *
+ * Deliberately conservative: returns an empty object unless it recognises the
+ * shapes, so an unparseable message falls back to the existing fail path rather
+ * than inventing a ratio.
+ */
+export function parseTokenCounts(text: string): { requested?: number; max?: number } {
+  const requested = /requested (?:about |approximately |around )?([\d,]+)\s*tokens/i.exec(text);
+  const max =
+    /maximum (?:context length|context window) is\s*([\d,]+)\s*tokens/i.exec(text) ??
+    /context (?:length|window) (?:of|is)\s*([\d,]+)\s*tokens/i.exec(text) ??
+    /limit is\s*([\d,]+)\s*tokens/i.exec(text);
+  const out: { requested?: number; max?: number } = {};
+  if (requested) out.requested = Number(requested[1]!.replace(/,/g, ''));
+  if (max) out.max = Number(max[1]!.replace(/,/g, ''));
+  return out;
+}
+
 function hasContent(body: Record<string, unknown>): boolean {
   const choices = body['choices'];
   if (!Array.isArray(choices) || choices.length === 0) return false;
@@ -285,8 +364,11 @@ function hasContent(body: Record<string, unknown>): boolean {
   return typeof reasoning === 'string' && reasoning.trim() !== '';
 }
 
+// Deliberately not truncated: the provider's own token counts sit at the end of
+// a long message, and truncating here is part of why the tokenizer disagreement
+// was invisible in the first place. The report already caps captured bodies.
 function describeFailure(status: number, text: string, transportError?: string): string {
   if (status === 0) return transportError ?? 'no response';
-  const snippet = text.replace(/\s+/g, ' ').slice(0, 140);
+  const snippet = text.replace(/\s+/g, ' ').slice(0, 600);
   return `HTTP ${status}${snippet ? `: ${snippet}` : ''}`;
 }

@@ -5,7 +5,7 @@
 Launch-QA readiness checks for OpenAI-compatible LLM endpoints.
 
 > **Status:** thirteen checks, all implemented, each verified twice against a
-> local mock server — once healthy, once carrying the specific defect it is meant
+> local mock server: once healthy, once carrying the specific defect it is meant
 > to catch. Nine check runs against real OpenRouter endpoints are recorded in
 > [`FINDINGS.md`](FINDINGS.md), along with sixteen bugs the tool found in itself
 > while making them.
@@ -13,7 +13,7 @@ Launch-QA readiness checks for OpenAI-compatible LLM endpoints.
 **If you read one thing, read [`FINDINGS.md`](FINDINGS.md).** It is the part
 that is not boilerplate: sixteen bugs this tool found in *itself* while being
 run against real endpoints, three of which produced a confident wrong answer
-rather than an error. Bug #14 is the one worth your time — the context probe
+rather than an error. Bug #14 is the one worth your time: the context probe
 reported "1,000,000 tokens confirmed" for a request the provider had just
 rejected with HTTP 400, because the verdict compared with `<` where it needed
 `<=`. A tool that reports success for the failure it exists to catch is worse
@@ -26,9 +26,10 @@ tomorrow, what will break? Every check returns `pass` / `warn` / `fail` with
 numbers, and the process exits non-zero if anything fails, so it can sit in CI
 as a gate on a provider-onboarding PR.
 
-> **Status:** thirteen checks, all implemented and verified against a local mock
-> server. Three have been run against a real OpenRouter endpoint — see
-> [Check coverage](#check-coverage) and `FINDINGS.md` for what they found.
+The [`blocked`](#four-statuses-not-three) status is the part that is easy to
+miss and hard to retrofit: it means the endpoint was never reached, so nothing
+was learned. A tool that reports a saturated free tier as a broken provider
+tells a reader to reject something that works.
 
 ## Install
 
@@ -46,7 +47,7 @@ node dist/cli.js --list-checks
 is required. For a quick look without building, `npx tsx src/cli.ts --list-checks`
 runs the CLI straight from source.
 
-**There is no `npx preflight` yet** — npm publishing is not wired up, so the
+**There is no `npx preflight` yet.** npm publishing is not wired up, so the
 examples below assume either a local build or `npx tsx`.
 
 Copy `providers.example.json` to `providers.json` and edit it; see
@@ -76,38 +77,38 @@ preflight --base-url https://api.example.com/v1 --model m \
 
 | Flag | Default | Notes |
 | --- | --- | --- |
-| `--base-url <url>` | — | Endpoint root, including `/v1`. |
-| `--model <id>` | — | Model id to exercise. |
+| `--base-url <url>` | none | Endpoint root, including `/v1`. |
+| `--model <id>` | none | Model id to exercise. |
 | `--key <key>` | env | Prefer `keyEnv` in `providers.json` over passing keys on the command line. |
-| `--config <path>` | — | `providers.json`; runs every entry. |
-| `--id <id>` | — | With `--config`, run only these provider ids. Repeatable. |
-| `--dry-run` | — | Print the planned request count per target and exit. **Makes no network calls.** Exits non-zero if the plan exceeds `--daily-cap`. |
+| `--config <path>` | none | `providers.json`; runs every entry. |
+| `--id <id>` | none | With `--config`, run only these provider ids. Repeatable. |
+| `--dry-run` | none | Print the planned request count per target and exit. **Makes no network calls.** Exits non-zero if the plan exceeds `--daily-cap`. |
 | `--daily-cap <n>` | `50` | Requests/day to plan against in `--dry-run`. |
 | `--zdr` | off | Include the zero-data-retention probe (1 request per target). |
 | `--runs <n>` | `20` | Latency runs. |
-| `--out <path>` | — | Where to write `report.json`. |
+| `--out <path>` | none | Where to write `report.json`. |
 | `--md` | off | Also write a markdown card per provider, next to `--out`. |
 | `--vision` | off | Enables the vision check. |
 | `--compare` | off | Diff claimed metadata against the OpenRouter catalog. |
-| `--only <a,b>` / `--skip <a,b>` | — | Filter the check list. |
+| `--only <a,b>` / `--skip <a,b>` | none | Filter the check list. |
 | `--timeout <ms>` | `60000` | Default per-check timeout. |
 | `--context-safety <n>` | `0.9` | Filler scaling factor for the context probe. |
 | `--context-probes <n>` | `4` | How many rungs to probe when the ladder is sized to the claim. |
-| `--context-ladder <rungs>` | — | Explicit rungs, e.g. `8k,32k,128k,1M`. Overrides the planned ladder. |
-| `--check-timeout <name=ms>` | — | Per-check override; repeatable. |
+| `--context-ladder <rungs>` | none | Explicit rungs, e.g. `8k,32k,128k,1M`. Overrides the planned ladder. |
+| `--check-timeout <name=ms>` | none | Per-check override; repeatable. |
 | `--latency-concurrency <n>` | `1` | Parallel latency runs. Keep at 1 for rate-limited providers. |
 | `--code-exec` | off | Lets `quality_smoke` execute model-written code. Off by default; see below. |
 | `--verbose` | off | Per-check detail while running. |
-| `--list-checks` | — | Print the registered checks and exit. |
+| `--list-checks` | none | Print the registered checks and exit. |
 
 ### Exit codes
 
 | Code | Meaning |
 | --- | --- |
 | `0` | No check failed. `warn` does not fail the build. |
-| `1` | At least one check **failed** — reached the provider, something is wrong with it. |
+| `1` | At least one check **failed**: reached the provider, something is wrong with it. |
 | `2` | Usage or configuration error (bad flags, unreadable `providers.json`). |
-| `3` | Nothing failed, but something was **blocked** — inconclusive, not clean. |
+| `3` | Nothing failed, but something was **blocked**, so the result is inconclusive rather than clean. |
 
 ### Four statuses, not three
 
@@ -120,7 +121,7 @@ preflight --base-url https://api.example.com/v1 --model m \
 
 A `fail` whose HTTP status is **429 or 503** is rewritten to `blocked`. This is
 applied centrally in the runner rather than inside each check, because a check
-that forgets it turns an outage into a rejection of a healthy provider — the
+that forgets it turns an outage into a rejection of a healthy provider, the
 exact failure this tool exists to prevent. The first Qwen run reported three
 FAILs for a model nobody had actually talked to.
 
@@ -191,24 +192,27 @@ header.
   ✓ data_policy        PASS    1841ms  a provider.data_collection:"deny" request succeeded, so at least one endpoint for this model offers a no-training path
 ```
 
-**That one FAIL is the most interesting line on the card.** The model advertises
+**That one WARN is the most interesting line on the card.** The model advertises
 a 1,000,000-token window, and the probe sent a prompt scaled *below* that claim
-— an estimated 899,979 tokens — expecting it to pass. It came back HTTP 400:
+(an estimated 899,979 tokens), expecting it to pass. It came back HTTP 400:
 
 > This endpoint's maximum context length is 1000000 tokens. However, you
 > requested about 1062081 tokens.
 
 We under-sent and were still rejected, because the endpoint's tokenizer counts
-our filler roughly 18% higher than our estimate does. So the claim is not safely
-usable, and the number a router should trust is the one that was *measured* —
-250,000 — not the one in the catalog. A card that had reported `PASS` here would
-have been worse than no card.
+our filler roughly 18% higher than our estimate does. The endpoint's own stated
+ceiling matches the catalog, so nothing here shows the window being smaller than
+advertised. What it shows is that we could not generate a valid 1M probe, so the
+claim is **unverified rather than refuted**, and the number a router should trust
+is the one that was *measured* (250,000). A card that reported `PASS` here, or
+that reported a "broken context window", would have been wrong in opposite
+directions.
 
 **On the `context_probe` line specifically:** the run above predates a fix. That
 run printed `PASS` with the note "matching the claimed 1,000,000" for the same
-probe that had just been rejected — an off-by-one in the verdict logic, since a
-failure *at* the claim was being compared with `<` instead of `<=`. The line
-shown is what the current version reports. It is bug #14 in
+probe that had just been rejected. The cause was an off-by-one in the verdict
+logic: a failure *at* the claim was compared with `<` where it needed `<=`. The
+line shown is what the current version reports. It is bug #14 in
 [`FINDINGS.md`](FINDINGS.md), and it is a useful illustration of why the checks
 are verified against mocks that can fail: a `pass` for the exact failure the
 check exists to catch is worse than no check, because it gets trusted.
@@ -315,7 +319,7 @@ length and supported parameters that the checks after it depend on, and
 `modality_claims` is late only because it reconciles the catalog against a
 `vision` measurement.
 
-### 1. `models_endpoint` — *is the model real, and what does it claim?*
+### 1. `models_endpoint`: *is the model real, and what does it claim?*
 
 `GET /models` must return JSON and list the model under test. Records
 `context_length`, pricing and supported parameters when advertised.
@@ -331,7 +335,7 @@ A single-model endpoint that lists *one* model under a different name is also a
 `warn` rather than a `fail`, because self-hosted servers routinely ignore the
 model field entirely and failing them would be wrong.
 
-### 2. `chat_basic` — *is the floor solid?*
+### 2. `chat_basic`: *is the floor solid?*
 
 One short prompt, and then the response is inspected for a well-formed
 `chat.completion`: a `choices[].message` with content, an `id`, and `usage`.
@@ -348,7 +352,7 @@ One short prompt, and then the response is inspected for a well-formed
 All three are `warn`: the endpoint works, but something downstream will be
 wrong. A missing `choices` array or empty content is a `fail`.
 
-### 3. `streaming` — *does the SSE contract hold?*
+### 3. `streaming`: *does the SSE contract hold?*
 
 Streams a deterministic prompt and requires parseable SSE frames, a final frame
 carrying `finish_reason`, and a `[DONE]` sentinel. It then runs the *same* prompt
@@ -359,7 +363,7 @@ Determinism is what makes the comparison meaningful, so the request pins
 `seed`** as well. The streamed and non-streamed calls are made with identical
 bodies, so any difference is transport, not sampling. When the catalog does *not*
 advertise `seed`, the report says so rather than implying a guarantee that isn't
-there — an endpoint that accepts `seed` and silently ignores it is a finding of
+there. An endpoint that accepts `seed` and silently ignores it is a finding of
 its own.
 
 The two answers are then classified:
@@ -368,7 +372,7 @@ The two answers are then classified:
 | --- | --- | --- |
 | Streamed text is a **strict prefix** of the non-streamed text | `fail` | The tail was dropped. This is the bug the check exists for. |
 | Lengths within **15%** | `pass` | Close enough to be the same answer. |
-| Lengths outside 15%, and not a prefix | `warn` | Divergence without a dropped-tail signature — most likely sampling, not a transport fault. A transport bug does not usually produce a *longer* stream. |
+| Lengths outside 15%, and not a prefix | `warn` | Divergence without a dropped-tail signature, most likely sampling, not a transport fault. A transport bug does not usually produce a *longer* stream. |
 | Stream ended at `max_tokens` | not judged | A truncated-by-budget stream is a correct response to a truncated budget, not a defect. |
 
 *Why a router cares:*
@@ -380,7 +384,7 @@ The two answers are then classified:
   timeout. `warn`, because the stream is otherwise usable.
 - **A dropped last token** is the bug this check exists for. It is common,
   invisible in single-shot testing, and silently corrupts every streamed answer
-  in production — a truncated word at the end of each response. It is only
+  in production, a truncated word at the end of each response. It is only
   detectable by comparing against non-streamed ground truth, which is what this
   does.
 - **The `warn` case is load-bearing.** Without a prefix test, a length
@@ -388,7 +392,7 @@ The two answers are then classified:
   sampling noise. The prefix signature is what separates a real transport fault
   from an honest "these two calls drew different tokens."
 
-### 4. `tool_calling` — *are the arguments executable?*
+### 4. `tool_calling`: *are the arguments executable?*
 
 Sends a tool whose schema nests an object inside an object, then verifies the
 returned `arguments` string parses into that nested shape. Then sends a prompt
@@ -408,7 +412,7 @@ that should **not** call a tool and verifies it doesn't.
 The legacy `function_call` shape is accepted but raises a finding, because a
 client written against `tool_calls` sees no call at all.
 
-### 5. `json_mode` — *is structured output actually structured?*
+### 5. `json_mode`: *is structured output actually structured?*
 
 Sends `response_format: {type: "json_object"}` and requires the output to parse
 as an object. The prompt contains the word "json", since OpenAI-family
@@ -419,11 +423,11 @@ of the prompt rather than the provider.
 `response_format` and ignores it**. Nothing fails at request time; the output
 arrives wrapped in prose and the break surfaces downstream, far from the cause.
 A rejection is a `fail` rather than a warning, because the catalog normally
-advertises `response_format` — if the advertised surface and the real one
+advertises `response_format`. If the advertised surface and the real one
 disagree, that is a launch blocker. Valid JSON in a code fence is a `warn`: the
 mode was honoured, the formatting was not, and a strict parser needs to strip it.
 
-### 6. `error_handling` — *can a retry loop tell a fault from a mistake?*
+### 6. `error_handling`: *can a retry loop tell a fault from a mistake?*
 
 Three probes that any endpoint must survive: a malformed body, an unknown model
 id, and a ~2 MB oversized request. Each must return a sensible status and a
@@ -445,11 +449,11 @@ JSON error body.
 rate limiter before it is a server, and treating that as a defect would make the
 check useless on exactly the endpoints that need it.
 
-### 7. `context_probe` — *is the advertised context window real?*
+### 7. `context_probe`: *is the advertised context window real?*
 
 Filler prompts up a ladder sized to the advertised `context_length`, stopping at
-the first failure. The ladder *reaches the claim* when the budget allows — a
-1M claim gets rungs of 125k / 250k / 500k / 1M rather than stopping at 128k —
+the first failure. The ladder *reaches the claim* when the budget allows: a
+1M claim gets rungs of 125k / 250k / 500k / 1M rather than stopping at 128k,
 so a `pass` on a 1M model means 1M was actually exercised. Override with
 `--context-ladder`, or set the rung count with `--context-probes`.
 
@@ -465,11 +469,26 @@ overflow the real one. Two subtleties the check is careful about:
 - **Token counts are estimates.** Filler is scaled by `--context-safety`
   (default 0.9) so estimator error does not manufacture a failure. A false fail
   is visible and explainable; a false pass silently misroutes traffic.
+- **A rejected probe is not automatically a refuted claim.** When the endpoint
+  reports how *it* counted the request, the two are compared. If we estimated
+  below the claim, the provider counted above it, and the provider's own stated
+  ceiling agrees with the catalog, then the likely cause is that our filler
+  inflates under their tokenizer, not that the window is smaller. That is
+  reported as a `warn` with a `context_probe_tokenizer_disagreement` finding
+  and a `tokenizer_ratio` metric, and the note says "unverified, not as
+  refuted". Only a provider whose stated ceiling is *below* the catalog claim
+  produces a `fail`.
 
-It never probes above what the provider claims, and it stops early on failure —
+  This distinction is the difference between a measurement and an accusation.
+  A real endpoint answered with *"maximum context length is 1000000 tokens.
+  However, you requested about 1062081 tokens"* after we sent an estimated
+  899,979, and calling that a broken context window would have blamed the
+  provider for our arithmetic.
+
+It never probes above what the provider claims, and it stops early on failure
 so a model with an 8k window costs 1 request, not 4.
 
-### 8. `latency` — *is it fast enough to route to?*
+### 8. `latency`: *is it fast enough to route to?*
 
 N runs (default 20) of a fixed prompt capped at 200 output tokens, streamed, so
 TTFT and decode rate are measured separately. Reports p50 and p95 for both,
@@ -484,7 +503,7 @@ One warm-up run is discarded, because cold-start cost is not what steady-state
 traffic sees. Partial failures are a `warn` and the first failing request/response
 pair is kept in the report, because intermittent `429`s are a rate-limit
 finding rather than a defect. `latency` makes no judgement about whether the
-numbers are *good* — that threshold belongs to your product, not this tool.
+numbers are *good*, but that threshold belongs to your product, not this tool.
 
 **Reasoning models are handled explicitly.** For a model that thinks before it
 answers, `completion_tokens` conflates reasoning with visible output, and TTFT
@@ -500,7 +519,7 @@ includes the entire thinking phase. Both are reported separately:
 
 Reasoning text is read from `delta.reasoning_content` and
 `delta.reasoning`, and counts from `completion_tokens_details.reasoning_tokens`,
-`output_tokens_details.reasoning_tokens` or a top-level `reasoning_tokens` —
+`output_tokens_details.reasoning_tokens` or a top-level `reasoning_tokens`
 providers disagree about all of these. If a run spends its entire output budget
 thinking and emits nothing visible, that is reported as a failure with that
 explicit reason, not as an empty response.
@@ -510,7 +529,7 @@ explicit reason, not as an empty response.
 from a window shorter than the jitter around it is noise, and a confidently
 wrong number in a launch doc is worse than a blank one.
 
-### 9. `quality_smoke` — *which capability broke?*
+### 9. `quality_smoke`: *which capability broke?*
 
 Ten fixed prompts from `prompts/golden.json`: 2 arithmetic, 2 short code tasks,
 2 factual, 2 instruction-following with a format constraint, 1 tool call, 1 that
@@ -521,7 +540,7 @@ breakdown.
 with arithmetic at 0/2 and facts at 2/2 is a completely different provider from
 6/10 with the reverse, and they belong in different routing tiers.
 
-Code tasks are scored **structurally by default** — the output must parse as
+Code tasks are scored **structurally by default**: the output must parse as
 JavaScript and declare the required function, which catches prose answers and
 truncated snippets without executing anything the model produced. `--code-exec`
 additionally runs a real assertion suite in a sandboxed child process with a hard
@@ -535,12 +554,12 @@ refusal.
 > **A golden suite measures the test as well as the model.** The first live run
 > scored 9/10, and the miss was a defect in our prompt, not the model: it asked
 > for "three primary colors" and only accepted RED/BLUE/YELLOW, while the model
-> answered RED,GREEN,BLUE — all four format constraints satisfied. Additive and
+> answered RED,GREEN,BLUE, all four format constraints satisfied. Additive and
 > subtractive primaries is a genuinely contested question, so that prompt would
 > have been a permanent false positive teaching you to ignore the score. A test
 > now asserts no golden prompt depends on a contested fact.
 
-### 10. `structured_outputs` — *is the schema actually enforced?*
+### 10. `structured_outputs`: *is the schema actually enforced?*
 
 A sibling of `json_mode`, asking for more. `json_mode` only guarantees valid
 JSON; `structured_outputs` asks the provider to enforce a schema, which is what
@@ -553,10 +572,10 @@ inverse also now holds: when `json_mode` is rejected and the catalog does not
 list `response_format`, the note says the catalog is the thing being judged, not
 the endpoint.
 
-### 11. `vision` — *does the model actually look?*
+### 11. `vision`: *does the model actually look?*
 
-Gated behind `--vision`. Sends an image generated in code — a solid field with a
-border, so the ground truth is exact and there is no asset to fetch — and asks
+Gated behind `--vision`. Sends an image generated in code (a solid field with a
+border, so the ground truth is exact and there is no asset to fetch) and asks
 whether it contains any written text.
 
 *Why a router cares:* a model that is not really multimodal will return a
@@ -565,16 +584,16 @@ caller the difference. The question is deliberately one a text-only model cannot
 fake: a model that never looked describes the image or hedges, a model that
 looked says "no".
 
-### 12. `modality_claims` — *do the catalog and the model agree?*
+### 12. `modality_claims`: *do the catalog and the model agree?*
 
 Zero requests. It reads facts the other checks already established rather than
 sending anything of its own, and it runs after `vision` for that reason.
 
 Three sources can disagree about whether a model accepts images:
 
-1. what the model page **describes** — marketing prose,
-2. what the catalog **lists** — `architecture.modality`,
-3. what the endpoint actually **does** — measured by the `vision` check.
+1. what the model page **describes**: marketing prose,
+2. what the catalog **lists**: `architecture.modality`,
+3. what the endpoint actually **does**: measured by the `vision` check.
 
 Only the third is evidence. The first two are the same publisher's claims about
 the same publisher, which makes them correlated rather than corroborating: a
@@ -582,7 +601,7 @@ catalog can be confidently and consistently wrong, and when it is, the router is
 the thing that finds out.
 
 *Why a router cares:* the asymmetry is what matters. "Lists image, measures
-fail" is far worse than "lists text, measures nothing" — the first sends real
+fail" is far worse than "lists text, measures nothing": the first sends real
 images to an endpoint that will describe something else in their place, and the
 caller has no way to tell. The reverse, a description promising vision the
 catalog never mentions, wastes onboarding time rather than corrupting output, so
@@ -597,13 +616,13 @@ Two details about its verdicts, both deliberate:
 - **A disagreement is a `pass`, not a `fail` or a `warn`.** The endpoint did what
   it did; what disagrees is the publisher's own metadata about it. The check
   raises a *finding* naming which source is at odds with which, and leaves the
-  weighing to the reader — a check that turned inconsistent metadata into a red
+  weighing to the reader, a check that turned inconsistent metadata into a red
   status would be reporting a marketing problem as a production outage.
 - **"Not measured" is reported as such, in the note.** With `--vision` unset it
   passes with "description and catalog agree; not measured, because `--vision`
   was not run" rather than claiming agreement it did not establish. When
   `vision` *did* run and the reply was neither yes nor no, that is surfaced as
-  `inconclusive` and explicitly not treated as a `fail` — absence of evidence
+  `inconclusive` and explicitly not treated as a `fail`, absence of evidence
   and evidence of absence are different claims.
 
 One limit worth stating: the claim patterns are deliberately narrow to avoid
@@ -612,29 +631,29 @@ recognised phrasing is *not* flagged. A missed claim is quieter than an invented
 one, and an invented finding is the more expensive error.
 
 
-### 13. `data_policy` — *is there a no-training route?*
+### 13. `data_policy`: *is there a no-training route?*
 
 Opt-in via `--zdr`, one request.
 
-OpenRouter publishes **no data-policy field** — not in the catalog, not on the
+OpenRouter publishes **no data-policy field**: not in the catalog, not on the
 per-model endpoints endpoint. What it does expose is a request-side control:
 
-> `provider.data_collection: "deny"` — *"use only providers which do not collect
-> user data. If no available model provider meets the requirement, your request
-> will return an error."*
+> `provider.data_collection: "deny"`, described as *"use only providers which do
+> not collect user data. If no available model provider meets the requirement,
+> your request will return an error."*
 
 So the question is answerable by behaviour rather than by scraping a model page.
 One cheap request pinned to `deny`:
 
-- **success** — at least one endpoint offers a no-training path. The finding
+- **success**, meaning at least one endpoint offers a no-training path. The finding
   names the provider that actually served the request, because "a ZDR path
   exists" is close to useless without knowing which one you got.
-- **that specific error** — *no* endpoint for the model qualifies. Every request
+- **that specific error**, meaning *no* endpoint for the model qualifies. Every request
   routed there may be stored and used for training. This **fails rather than
   warns**, because it is a routing constraint rather than a quality issue.
 
-The asymmetry is deliberate: the affirmative is weak — it describes one request
-that happened to be routed well, and the next may not be — while the negative is
+The asymmetry is deliberate: the affirmative is weak, it describes one request
+that happened to be routed well, and the next may not be, while the negative is
 strong.
 
 *Why a router cares:* if there is no ZDR path, anything routed to that model may
@@ -644,7 +663,7 @@ catalog field that does not exist.
 ## Findings vs notes
 
 A `Note` is a verdict: something passed, warned or failed. A **finding** is an
-observation that is neither — a number that came off the wire, plus our reading
+observation that is neither, a number that came off the wire, plus our reading
 of it. Findings get their own section in the markdown card because a status table
 forces a binary reading, and these deserve to be read as evidence.
 
@@ -675,7 +694,7 @@ this against a half-broken provider is the normal case.
 **Every check has a timeout.** The registry enforces it, so a hung endpoint
 produces a `fail` with `timedOut: true` rather than a hung CI job.
 
-**Keys are redacted twice** — at capture time, so a raw key never enters the
+**Keys are redacted twice**, at capture time, so a raw key never enters the
 report object, and again as a sweep over the serialized JSON, to catch keys that
 arrive inside a response body the tool doesn't control. `Authorization`-style
 headers and key-shaped strings (`sk-…`, bearer tokens) are masked even when the
@@ -737,17 +756,17 @@ claimed against what the measurement found.
 | 4 | `tool_calling` | 2 | implemented |
 | 5 | `json_mode` | 1 | implemented |
 | 6 | `error_handling` | 3 | implemented |
-| 7 | `context_probe` | 4 | implemented; ladder sized to the claimed window |
+| 7 | `context_probe` | 4 | implemented; ladder sized to the claimed window, and distinguishes a refuted claim from an unverifiable one |
 | 8 | `latency` | runs + 1 | implemented; one discarded warm-up, then `--runs` |
 | 9 | `quality_smoke` | 10 | implemented, `prompts/golden.json` |
 | 10 | `structured_outputs` | 1 | implemented; self-skips when the catalog does not advertise it |
 | 11 | `vision` | 1 | implemented, opt-in via `--vision` |
 | 12 | `modality_claims` | 0 | implemented; reconciles description, catalog and measurement |
 | 13 | `data_policy` | 1 | implemented, opt-in via `--zdr` |
-| — | `--compare` | 0 | implemented; diffs claimed metadata against the OpenRouter catalog |
+| none | `--compare` | 0 | implemented; diffs claimed metadata against the OpenRouter catalog |
 
 Request counts are the base cost, and the whole plan is costable before
-spending any of it — see [`--dry-run`](#usage).
+spending any of it, see [`--dry-run`](#usage).
 
 `modality_claims`, `structured_outputs` and `data_policy` can all legitimately
 return `skip`, and that is the correct answer rather than a gap: a check that

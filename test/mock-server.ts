@@ -64,6 +64,12 @@ export interface MockOptions {
   /** Largest prompt the mock will accept, in characters. */
   maxPromptChars?: number;
   /**
+   * Make context rejections report the provider's own token counts, as several
+   * real providers do, and inflate them by `inflation` to simulate a tokenizer
+   * that disagrees with our estimate. `max` is the ceiling the mock claims.
+   */
+  tokenCountsInError?: { max: number; inflation: number };
+  /**
    * Body size limit in bytes; defaults to 3 MB. A 1M-token context probe is a
    * ~4.2 MB request and a 2M rung is ~8.5 MB, so tests that probe a large claim
    * must raise this — a 413 here is the mock's limit, not the model's.
@@ -190,6 +196,24 @@ export async function startMock(options: MockOptions = {}): Promise<MockHandle> 
       );
       const ceiling = defects.has('context-tiny') ? 4_000 : opts.maxPromptChars;
       if (ceiling !== undefined && rawPrompt.length > ceiling) {
+        // A provider that tells you what it counted is the only way to tell a
+        // short window from a low estimate, so the defect that simulates one
+        // reports both numbers the way real providers do.
+        if (opts.tokenCountsInError) {
+          const model_ = models.find((m) => m.id === model);
+          const statedMax = opts.tokenCountsInError.max;
+          const counted = Math.round((rawPrompt.length / 4) * opts.tokenCountsInError.inflation);
+          return json(res, 400, {
+            error: {
+              message:
+                `This endpoint's maximum context length is ${statedMax} tokens. ` +
+                `However, you requested about ${counted.toLocaleString('en-US')} tokens ` +
+                `(${Math.round((rawPrompt.length / 4) * opts.tokenCountsInError.inflation).toLocaleString('en-US')} of text).`,
+              code: 'context_length_exceeded',
+            },
+            model: model_?.id,
+          });
+        }
         return json(res, 400, { error: { message: 'maximum context length exceeded', code: 'context_length_exceeded' } });
       }
 

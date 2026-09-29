@@ -222,6 +222,68 @@ async function main(): Promise<void> {
     }
   });
 
+  await test('a tokenizer disagreement is an inability to verify, not a defect', async () => {
+    // Space Bunny's real case. We estimated 899,979 tokens against a 1M claim
+    // and were rejected, because the endpoint counted the same prompt as
+    // 1,062,081. Its own stated ceiling matched the catalog. Calling that a
+    // "contradicted claim" accuses the provider of something our filler caused.
+    const { parseTokenCounts } = await import('../src/checks/context-probe.js');
+    const parsed = parseTokenCounts(
+      "This endpoint's maximum context length is 1000000 tokens. However, you requested " +
+        'about 1062081 tokens (1062049 of text).',
+    );
+    assertEqual(parsed.max, 1_000_000, 'the stated ceiling should be parsed');
+    assertEqual(parsed.requested, 1_062_081, 'the counted request should be parsed');
+    assertEqual(
+      JSON.stringify(parseTokenCounts('maximum context length exceeded')),
+      '{}',
+      'an unhelpful message must parse to nothing rather than to a guess',
+    );
+
+    const server = await startMock({
+      models: [{ id: 'mock-model-1', context_length: 32_000 }],
+      maxPromptChars: 110_000,
+      tokenCountsInError: { max: 32_000, inflation: 1.18 },
+    });
+    try {
+      const def = listChecks().find((c) => c.name === 'context_probe')!;
+      const ctx = makeContext(server.url, { contextLadder: [8_000, 16_000, 32_000] }, {}, {});
+      (ctx.facts as Record<string, unknown>)['claimedContextLength'] = 32_000;
+      const r = await runCheck(def, ctx);
+      assertEqual(r.status, 'warn', `an unverifiable claim is not a refuted one, was ${r.status}: ${r.note}`);
+      assert(r.note.includes('unverified, not as refuted'), `the note should say so: ${r.note}`);
+      assert((r.metrics['tokenizer_ratio'] as number) > 1.1, 'the ratio should be recorded');
+      const f = (r.findings ?? []).find((x) => x.id === 'context_probe_tokenizer_disagreement');
+      assert(f, 'a tokenizer disagreement should raise its own finding');
+      assert(f!.inference.includes('not contradicted'), `the inference should be careful: ${f!.inference}`);
+    } finally {
+      await server.close();
+    }
+  });
+
+  await test('a genuinely smaller window still fails, even with counts in the error', async () => {
+    // The mirror image: the provider's own ceiling is BELOW the catalog claim, so
+    // the claim really is false and the tokenizer story does not apply.
+    const server = await startMock({
+      models: [{ id: 'mock-model-1', context_length: 32_000 }],
+      maxPromptChars: 110_000,
+      tokenCountsInError: { max: 12_000, inflation: 1.0 },
+    });
+    try {
+      const def = listChecks().find((c) => c.name === 'context_probe')!;
+      const ctx = makeContext(server.url, { contextLadder: [8_000, 16_000, 32_000] }, {}, {});
+      (ctx.facts as Record<string, unknown>)['claimedContextLength'] = 32_000;
+      const r = await runCheck(def, ctx);
+      assertEqual(r.status, 'fail', `a ceiling below the claim is a real defect, was ${r.status}`);
+      assert(
+        !(r.findings ?? []).some((f) => f.id === 'context_probe_tokenizer_disagreement'),
+        'the tokenizer finding must not fire when the window really is smaller',
+      );
+    } finally {
+      await server.close();
+    }
+  });
+
   await test('an explicit --context-ladder overrides the planned one', async () => {
     const server = await startMock({ models: [{ id: 'mock-model-1', context_length: 1_000_000 }] });
     try {
